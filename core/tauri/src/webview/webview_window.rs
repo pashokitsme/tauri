@@ -33,6 +33,7 @@ use crate::{
   ipc::{CommandArg, CommandItem, InvokeError, OwnedInvokeResponder},
   manager::{webview::WebviewLabelDef, AppManager},
   sealed::{ManagerBase, RuntimeOrDispatch},
+  webview::DownloadEvent,
   webview::PageLoadPayload,
   webview::WebviewBuilder,
   window::WindowBuilder,
@@ -228,6 +229,55 @@ tauri::Builder::default()
     f: F,
   ) -> Self {
     self.webview_builder = self.webview_builder.on_web_resource_request(f);
+    self
+  }
+
+  /// Set a download event handler to be notified when a download is requested or finished.
+  ///
+  /// Returning `false` prevents the download from happening on a [`DownloadEvent::Requested`] event.
+  ///
+  /// # Examples
+  ///
+  #[cfg_attr(
+    feature = "unstable",
+    doc = r####"
+```rust,no_run
+use tauri::{
+  utils::config::{Csp, CspDirectiveSources, WebviewUrl},
+  window::WindowBuilder,
+  webview::{DownloadEvent, WebviewBuilder},
+};
+
+tauri::Builder::default()
+  .setup(|app| {
+    let window = WindowBuilder::new(app, "label").build()?;
+    let webview_builder = WebviewBuilder::new("core", WebviewUrl::App("index.html".into()))
+      .on_download(|webview, event| {
+        match event {
+          DownloadEvent::Requested { url, destination } => {
+            println!("downloading {}", url);
+            *destination = "/home/tauri/target/path".into();
+          }
+          DownloadEvent::Finished { url, path, success } => {
+            println!("downloaded {} to {:?}, success: {}", url, path, success);
+          }
+          _ => (),
+        }
+        // let the download start
+        true
+      });
+
+    let webview = window.add_child(webview_builder, tauri::LogicalPosition::new(0, 0), window.inner_size().unwrap())?;
+    Ok(())
+  });
+```
+  "####
+  )]
+  pub fn on_download<F: Fn(Webview<R>, DownloadEvent<'_>) -> bool + Send + Sync + 'static>(
+    mut self,
+    f: F,
+  ) -> Self {
+    self.webview_builder = self.webview_builder.on_download(f);
     self
   }
 
